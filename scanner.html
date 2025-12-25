@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>SMART-RDS QR Scanner</title>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <!-- html5-qrcode library -->
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+  <h2>SMART-RDS QR Scanner</h2>
+
+  <div id="reader" style="width:300px;"></div>
+  <p>Scanned text:</p>
+  <pre id="qrText"></pre>
+
+  <button id="uploadBtn" disabled>Upload Bill to Firebase</button>
+
+  <script>
+    // 1) Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCf5yQAkQGICClkV1p39p8dqNIiZQoKeKc",
+      authDomain: "smart-rds.firebaseapp.com",
+      databaseURL: "https://smart-rds-default-rtdb.firebaseio.com",
+      projectId: "smart-rds",
+      storageBucket: "smart-rds.firebasestorage.app",
+      messagingSenderId: "1059807897058",
+      appId: "1:1059807897058:web:46fa1720cb7ca87658c5bb",
+      measurementId: "G-BFE86XW3DF"
+    };
+
+    // 2) Init Firebase Web SDK
+    const app = firebase.initializeApp(firebaseConfig);
+    const db  = firebase.database();
+
+    let lastScan = "";
+
+    // 3) Start QR scanner
+    function onScanSuccess(decodedText, decodedResult) {
+      if (decodedText === lastScan) return;
+      lastScan = decodedText;
+
+      document.getElementById("qrText").textContent = decodedText;
+      document.getElementById("uploadBtn").disabled = false;
+    }
+
+    function onScanFailure(error) {
+      // ignore continuous errors
+    }
+
+    const html5QrCode = new Html5Qrcode("reader");
+    Html5Qrcode.getCameras().then(cameras => {
+      if (cameras && cameras.length) {
+        const camId = cameras[0].id;
+        html5QrCode.start(
+          camId,
+          { fps: 10, qrbox: 250 },
+          onScanSuccess,
+          onScanFailure
+        );
+      }
+    }).catch(err => {
+      alert("Camera error: " + err);
+    });
+
+    // 4) Upload to Firebase RTDB when button clicked
+    document.getElementById("uploadBtn").addEventListener("click", () => {
+      if (!lastScan) return;
+
+      // Example: assume QR string is exactly rationId
+      const rationId = lastScan.trim();
+
+      // Example fixed values; later you can encode full BILL in QR
+      const shop     = "TN001";
+      const cardType = "AAY";
+      const date     = new Date().toISOString();   // current time
+
+      const bill = {
+        date: date,
+        cardType: cardType,
+        rice: 0.5,
+        sugar: 0.5,
+        wheat: 0.5,
+        dhal: 0.5,
+        kerosene: 0.0
+      };
+
+      const path = `shops/${shop}/bills/${rationId}`;
+
+      db.ref(path).set(bill)
+        .then(() => {
+          alert("Bill uploaded to Firebase!");
+          document.getElementById("uploadBtn").disabled = true;
+        })
+        .catch(err => {
+          alert("Firebase error: " + err);
+        });
+    });
+  </script>
+</body>
+</html>
