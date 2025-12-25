@@ -23,7 +23,7 @@
   <button id="uploadBtn" disabled>Upload Bill to Firebase</button>
 
   <script>
-    // 1) Your Firebase config (from Firebase console)
+    // 1) Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyCf5yQAkQGICClkV1p39p8dqNIiZQoKeKc",
       authDomain: "smart-rds.firebaseapp.com",
@@ -41,30 +41,57 @@
 
     let lastScan = "";
 
+    // Send rationId to ESP32 HTTP server
+    async function sendRationIdToEsp32(rationId) {
+      try {
+        const url = "http://192.168.4.1/cardid"; // ESP32 AP IP
+        const params = new URLSearchParams();
+        params.append("rationId", rationId);
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: params.toString()
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          alert("ESP32 error: " + txt);
+        } else {
+          console.log("Ration ID sent to ESP32/STM32");
+        }
+      } catch (e) {
+        alert("Network error to ESP32: " + e);
+      }
+    }
+
     // 3) Called when QR is successfully decoded
     function onScanSuccess(decodedText, decodedResult) {
-      if (decodedText === lastScan) return;   // ignore duplicate scans
+      if (decodedText === lastScan) return;
       lastScan = decodedText;
 
       document.getElementById("qrText").textContent = decodedText;
       document.getElementById("uploadBtn").disabled = false;
+
+      const rationId = decodedText.trim(); // "TN-09-1234567890"
+      // Immediately notify ESP32/STM32 to start card process
+      sendRationIdToEsp32(rationId);
     }
 
     function onScanFailure(error) {
       // ignore continuous scan errors
     }
 
-    // 4) Start the camera and QR scanner using BACK camera
+    // 4) Start QR scanner using back camera
     const html5QrCode = new Html5Qrcode("reader");       // [web:218]
     const config = { fps: 10, qrbox: 250 };
 
     html5QrCode.start(
-      { facingMode: { exact: "environment" } },  // prefer back camera
+      { facingMode: { exact: "environment" } },
       config,
       onScanSuccess,
       onScanFailure
     ).catch(err => {
-      // Fallback if exact back camera not available
       html5QrCode.start(
         { facingMode: "environment" },
         config,
@@ -75,15 +102,13 @@
       });
     });
 
-    // 5) Upload bill for scanned ration ID
+    // 5) Upload bill to Firebase when sale finished
     document.getElementById("uploadBtn").addEventListener("click", () => {
       if (!lastScan) return;
 
-      // QR text is ration ID, e.g. "TN-09-1234567890"
       const rationId = lastScan.trim();
-
       const shop     = "TN001";                 // adjust as needed
-      const cardType = "AAY";                   // adjust as needed
+      const cardType = "AAY";                   // can be chosen in UI later
       const date     = new Date().toISOString();
 
       const bill = {
@@ -96,7 +121,6 @@
         kerosene: 0.0
       };
 
-      // Path: /shops/TN001/bills/TN-09-1234567890
       const path = `shops/${shop}/bills/${rationId}`;
 
       db.ref(path).set(bill)                    // write to RTDB [web:97]
