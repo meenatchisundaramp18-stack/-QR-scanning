@@ -3,23 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <title>SMART-RDS QR Scanner</title>
+
+  <!-- Firebase SDK (compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
-  <!-- html5-qrcode library -->
+  <!-- HTML5 QR Code library -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
   <h2>SMART-RDS QR Scanner</h2>
 
+  <!-- Camera preview -->
   <div id="reader" style="width:300px;"></div>
-  <p>Scanned text:</p>
+
+  <p>Scanned ration ID:</p>
   <pre id="qrText"></pre>
 
   <button id="uploadBtn" disabled>Upload Bill to Firebase</button>
 
   <script>
-    // 1) Your Firebase config
+    // 1) Your Firebase config (from Firebase console)
     const firebaseConfig = {
       apiKey: "AIzaSyCf5yQAkQGICClkV1p39p8dqNIiZQoKeKc",
       authDomain: "smart-rds.firebaseapp.com",
@@ -31,15 +35,15 @@
       measurementId: "G-BFE86XW3DF"
     };
 
-    // 2) Init Firebase Web SDK
-    const app = firebase.initializeApp(firebaseConfig);
-    const db  = firebase.database();
+    // 2) Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);   // [web:97]
+    const db  = firebase.database();                     // [web:97]
 
     let lastScan = "";
 
-    // 3) Start QR scanner
+    // 3) Called when QR is successfully decoded
     function onScanSuccess(decodedText, decodedResult) {
-      if (decodedText === lastScan) return;
+      if (decodedText === lastScan) return;   // ignore duplicate scans
       lastScan = decodedText;
 
       document.getElementById("qrText").textContent = decodedText;
@@ -47,35 +51,40 @@
     }
 
     function onScanFailure(error) {
-      // ignore continuous errors
+      // ignore continuous scan errors
     }
 
-    const html5QrCode = new Html5Qrcode("reader");
-    Html5Qrcode.getCameras().then(cameras => {
-      if (cameras && cameras.length) {
-        const camId = cameras[0].id;
-        html5QrCode.start(
-          camId,
-          { fps: 10, qrbox: 250 },
-          onScanSuccess,
-          onScanFailure
-        );
-      }
-    }).catch(err => {
-      alert("Camera error: " + err);
+    // 4) Start the camera and QR scanner using BACK camera
+    const html5QrCode = new Html5Qrcode("reader");       // [web:218]
+    const config = { fps: 10, qrbox: 250 };
+
+    html5QrCode.start(
+      { facingMode: { exact: "environment" } },  // prefer back camera
+      config,
+      onScanSuccess,
+      onScanFailure
+    ).catch(err => {
+      // Fallback if exact back camera not available
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        onScanSuccess,
+        onScanFailure
+      ).catch(err2 => {
+        alert("Camera error: " + err2);
+      });
     });
 
-    // 4) Upload to Firebase RTDB when button clicked
+    // 5) Upload bill for scanned ration ID
     document.getElementById("uploadBtn").addEventListener("click", () => {
       if (!lastScan) return;
 
-      // Example: assume QR string is exactly rationId
+      // QR text is ration ID, e.g. "TN-09-1234567890"
       const rationId = lastScan.trim();
 
-      // Example fixed values; later you can encode full BILL in QR
-      const shop     = "TN001";
-      const cardType = "AAY";
-      const date     = new Date().toISOString();   // current time
+      const shop     = "TN001";                 // adjust as needed
+      const cardType = "AAY";                   // adjust as needed
+      const date     = new Date().toISOString();
 
       const bill = {
         date: date,
@@ -87,11 +96,12 @@
         kerosene: 0.0
       };
 
+      // Path: /shops/TN001/bills/TN-09-1234567890
       const path = `shops/${shop}/bills/${rationId}`;
 
-      db.ref(path).set(bill)
+      db.ref(path).set(bill)                    // write to RTDB [web:97]
         .then(() => {
-          alert("Bill uploaded to Firebase!");
+          alert("Bill uploaded for " + rationId);
           document.getElementById("uploadBtn").disabled = true;
         })
         .catch(err => {
