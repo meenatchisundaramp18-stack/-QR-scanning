@@ -1,45 +1,352 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>QR → ESP32 HTTP</title>
+  <meta charset="UTF-8" />
+  <title>SMART-RDS QR Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- QR library -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    :root {
+      --bg: #050816;
+      --card: #0f172a;
+      --accent: #22c55e;
+      --accent-soft: rgba(34, 197, 94, 0.15);
+      --danger: #ef4444;
+      --text-main: #e5e7eb;
+      --text-muted: #9ca3af;
+      --border: #1f2937;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+        Roboto, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #111827 0, #020617 45%, #020617 100%);
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 480px;
+    }
+
+    .card {
+      background: linear-gradient(145deg, #020617, #020617);
+      border-radius: 20px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow:
+        0 18px 45px rgba(15, 23, 42, 0.95),
+        0 0 0 1px rgba(15, 23, 42, 0.4);
+      padding: 20px 18px 18px;
+      backdrop-filter: blur(20px);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 12px;
+    }
+
+    .title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .title span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .badge {
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: radial-gradient(circle at top left, var(--accent-soft), transparent 70%);
+      border: 1px solid rgba(34, 197, 94, 0.6);
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.25);
+    }
+
+    .section-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    .ip-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .ip-row input {
+      flex: 1;
+      padding: 9px 11px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: rgba(15, 23, 42, 0.8);
+      color: var(--text-main);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .ip-row input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.4);
+    }
+
+    .ip-row button {
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 0;
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 11px;
+      border-radius: 12px;
+      border: 1px solid rgba(31, 41, 55, 0.8);
+      background: radial-gradient(circle at left, rgba(148, 163, 184, 0.15), transparent 58%);
+      margin-bottom: 14px;
+    }
+
+    .summary-title {
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .summary-text {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .summary-pill {
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.9);
+      font-size: 11px;
+      color: var(--accent);
+      border: 1px solid rgba(34, 197, 94, 0.5);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    #qr-reader {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(31, 41, 55, 0.9);
+      background: #020617;
+    }
+
+    #qr-reader__scan_region {
+      border-radius: 12px !important;
+    }
+
+    #qr-reader video {
+      border-radius: 12px !important;
+    }
+
+    .footer {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .status {
+      font-size: 12px;
+      padding: 6px 9px;
+      border-radius: 8px;
+      margin-top: 8px;
+    }
+
+    .status.ok {
+      background: rgba(34, 197, 94, 0.12);
+      color: #bbf7d0;
+      border: 1px solid rgba(34, 197, 94, 0.5);
+    }
+
+    .status.err {
+      background: rgba(239, 68, 68, 0.1);
+      color: #fecaca;
+      border: 1px solid rgba(239, 68, 68, 0.55);
+    }
+
+    .last-qr {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--text-main);
+      word-break: break-all;
+    }
+  </style>
 </head>
 <body>
-  <h3>QR to ESP32 via HTTP</h3>
+  <div class="shell">
+    <div class="card">
+      <div class="header">
+        <div class="title">
+          SMART‑RDS
+          <span>ration card qr bridge</span>
+        </div>
+        <div class="badge">
+          <span class="badge-dot"></span>
+          Live scanner
+        </div>
+      </div>
 
-  <label>ESP32 IP:</label>
-  <input id="espIp" value="192.168.1.50" style="width:150px">
-  <div id="status">Ready</div>
+      <div class="section-label">ESP32 endpoint</div>
+      <div class="ip-row">
+        <input id="espIp" placeholder="10.21.37.192" />
+        <button type="button" onclick="testConnection()">Test</button>
+      </div>
 
-  <div id="qr-reader" style="width:300px; margin-top:16px;"></div>
-  <div style="margin-top:8px;">Last QR: <span id="lastQr"></span></div>
+      <div class="summary">
+        <div>
+          <div class="summary-title">Camera QR scanner</div>
+          <div class="summary-text">Scan ration QR → send to ESP32 HTTP → STM32 UART</div>
+        </div>
+        <div class="summary-pill">
+          HTTP
+          <span style="opacity:0.6;">/qr?value=...</span>
+        </div>
+      </div>
 
- <script>
-  async function sendToEsp32(text) {
-    const ip = document.getElementById("espIp").value.trim();
-    document.getElementById("status").innerText = `Sending to http://${ip}/qr...`;
-    
-    const url = `http://${ip}/qr?value=${encodeURIComponent(text)}`;
-    console.log("📡 Request:", url);  // Browser console debug
-    
-    try {
-      const res = await fetch(url, { timeout: 5000 });
-      const txt = await res.text();
-      document.getElementById("status").innerText = "✅ " + txt;
-      console.log("✅ Response:", txt);
-    } catch (e) {
-      document.getElementById("status").innerText = "❌ " + e.message;
-      console.error("❌ Error:", e);
+      <div id="qr-reader" style="width:100%; max-width:440px;"></div>
+
+      <div id="status" class="status" style="display:none;"></div>
+      <div class="last-qr">
+        Last QR: <span id="lastQr">—</span>
+      </div>
+
+      <div class="footer">
+        <span>Make sure phone and ESP32 are on the same Wi‑Fi.</span>
+        <span>ESP32 must run the HTTP server listening on <code>/qr</code>.</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let lastSent = "";
+    let lastSentTime = 0;
+    const DEBOUNCE_MS = 2500;
+
+    function setStatus(text, ok) {
+      const el = document.getElementById("status");
+      el.style.display = "block";
+      el.className = "status " + (ok ? "ok" : "err");
+      el.textContent = text;
     }
-  }
 
-  function onScanSuccess(decodedText) {
-    document.getElementById("lastQr").innerText = decodedText;
-    sendToEsp32(decodedText);
-  }
+    async function sendToEsp32(decodedText) {
+      const ip = document.getElementById("espIp").value.trim();
+      if (!ip) {
+        setStatus("Enter ESP32 IP address first.", false);
+        return;
+      }
 
-  // Rest unchanged...
-</script>
+      const now = Date.now();
+      if (decodedText === lastSent && now - lastSentTime < DEBOUNCE_MS) {
+        // ignore rapid duplicates
+        return;
+      }
+      lastSent = decodedText;
+      lastSentTime = now;
+
+      const url = `http://${ip}/qr?value=${encodeURIComponent(decodedText)}`;
+      try {
+        const res = await fetch(url, { method: "GET" });
+        const txt = await res.text();
+        setStatus(txt || "Delivered to ESP32.", res.ok);
+      } catch (err) {
+        setStatus("Failed to reach ESP32: " + err.message, false);
+      }
+    }
+
+    async function testConnection() {
+      const ip = document.getElementById("espIp").value.trim();
+      if (!ip) {
+        setStatus("Enter ESP32 IP to test.", false);
+        return;
+      }
+      const url = `http://${ip}/`;
+      try {
+        const res = await fetch(url, { method: "GET" });
+        const txt = await res.text();
+        setStatus("ESP32 reachable ✔ (" + res.status + ")", res.ok);
+        console.log("Test response:", txt);
+      } catch (e) {
+        setStatus("Cannot reach ESP32 at " + ip + ": " + e.message, false);
+      }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+      document.getElementById("lastQr").textContent = decodedText;
+      sendToEsp32(decodedText);
+    }
+
+    function onScanError(errorMessage) {
+      // ignore frame errors; scanner keeps running
+    }
+
+    const html5QrCode = new Html5Qrcode("qr-reader");
+    Html5Qrcode.getCameras()
+      .then((cameras) => {
+        if (!cameras || !cameras.length) {
+          setStatus("No camera devices found.", false);
+          return;
+        }
+        html5QrCode
+          .start(
+            { facingMode: "environment" },
+            { fps: 10, qrbox: { width: 260, height: 260 } },
+            onScanSuccess,
+            onScanError
+          )
+          .catch((err) => setStatus("Camera start failed: " + err, false));
+      })
+      .catch((err) => setStatus("Camera access error: " + err, false));
+  </script>
 </body>
 </html>
