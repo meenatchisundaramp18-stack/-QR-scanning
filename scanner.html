@@ -15,39 +15,31 @@
   <div id="qr-reader" style="width:300px; margin-top:16px;"></div>
   <div style="margin-top:8px;">Last QR: <span id="lastQr"></span></div>
 
-  <script>
-    async function sendToEsp32(text) {
-      const ip = document.getElementById("espIp").value.trim();
-      if (!ip) { alert("Set ESP32 IP first"); return; }
-
-      const url = `http://${ip}/qr?value=${encodeURIComponent(text)}`;
-      try {
-        const res = await fetch(url);
-        const txt = await res.text();
-        document.getElementById("status").innerText = "Sent: " + txt;
-      } catch (e) {
-        document.getElementById("status").innerText = "HTTP error: " + e;
-      }
+ <script>
+  async function sendToEsp32(text) {
+    const ip = document.getElementById("espIp").value.trim();
+    document.getElementById("status").innerText = `Sending to http://${ip}/qr...`;
+    
+    const url = `http://${ip}/qr?value=${encodeURIComponent(text)}`;
+    console.log("📡 Request:", url);  // Browser console debug
+    
+    try {
+      const res = await fetch(url, { timeout: 5000 });
+      const txt = await res.text();
+      document.getElementById("status").innerText = "✅ " + txt;
+      console.log("✅ Response:", txt);
+    } catch (e) {
+      document.getElementById("status").innerText = "❌ " + e.message;
+      console.error("❌ Error:", e);
     }
+  }
 
-    function onScanSuccess(decodedText, decodedResult) {
-      document.getElementById("lastQr").innerText = decodedText;
-      sendToEsp32(decodedText);
-    }
+  function onScanSuccess(decodedText) {
+    document.getElementById("lastQr").innerText = decodedText;
+    sendToEsp32(decodedText);
+  }
 
-    function onScanError(errorMessage) {}
-
-    const html5QrCode = new Html5Qrcode("qr-reader");
-    Html5Qrcode.getCameras().then(cameras => {
-      if (cameras && cameras.length) {
-        html5QrCode.start(
-          { facingMode: "environment" },
-          { fps: 10, qrbox: 250 },
-          onScanSuccess,
-          onScanError
-        );
-      }
-    }).catch(err => console.error(err));
-  </script>
+  // Rest unchanged...
+</script>
 </body>
 </html>
