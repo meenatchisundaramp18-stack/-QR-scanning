@@ -88,40 +88,43 @@
   </div>
 
   <script>
+    const statusEl = document.getElementById("status");
+    const lastQrEl = document.getElementById("lastQr");
+
     function setStatus(msg) {
-      document.getElementById("status").textContent = msg;
+      statusEl.textContent = msg;
     }
 
     async function sendToEsp32(text) {
       const ip = document.getElementById("espIp").value.trim();
-      if (!ip) { setStatus("Set ESP32 IP."); return; }
+      if (!ip) { setStatus("Set ESP32 IP"); return; }
+
       const url = `http://${ip}/qr?value=${encodeURIComponent(text)}`;
       try {
         const res = await fetch(url);
-        const txt = await res.text();
-        setStatus(txt || "Sent");
+        setStatus(res.ok ? "OK" : "HTTP " + res.status);
       } catch (e) {
-        setStatus("Error: " + e.message);
+        setStatus("No reply");
       }
     }
 
     async function testConnection() {
       const ip = document.getElementById("espIp").value.trim();
-      if (!ip) { setStatus("Set ESP32 IP."); return; }
+      if (!ip) { setStatus("Set ESP32 IP"); return; }
       try {
         const res = await fetch(`http://${ip}/`);
-        setStatus(res.ok ? "ESP32 OK" : "ESP32 error " + res.status);
+        setStatus(res.ok ? "ESP32 OK" : "ESP32 HTTP " + res.status);
       } catch (e) {
-        setStatus("Cannot reach ESP32: " + e.message);
+        setStatus("No reply");
       }
     }
 
-    function onScanSuccess(decodedText, decodedResult) {
-      document.getElementById("lastQr").textContent = "Last QR: " + decodedText;
+    function onScanSuccess(decodedText) {
+      lastQrEl.textContent = "Last QR: " + decodedText;
       sendToEsp32(decodedText);
     }
 
-    function onScanError(errorMessage) {}
+    function onScanError(_) {}
 
     const qr = new Html5Qrcode("qr-reader");
     Html5Qrcode.getCameras().then(cams => {
@@ -131,8 +134,8 @@
         { fps: 10, qrbox: { width: 240, height: 240 } },
         onScanSuccess,
         onScanError
-      ).catch(err => setStatus("Camera error: " + err));
-    }).catch(err => setStatus("Camera error: " + err));
+      ).catch(err => setStatus("Camera error"));
+    }).catch(err => setStatus("Camera error"));
   </script>
 </body>
 </html>
