@@ -1,137 +1,53 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>SMART-RDS QR Scanner</title>
-
-  <!-- Firebase SDK (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
-
-  <!-- HTML5 QR Code library -->
+  <meta charset="utf-8">
+  <title>QR → ESP32 HTTP</title>
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-  <h2>SMART-RDS QR Scanner</h2>
+  <h3>QR to ESP32 via HTTP</h3>
 
-  <!-- Camera preview -->
-  <div id="reader" style="width:300px;"></div>
+  <label>ESP32 IP:</label>
+  <input id="espIp" value="192.168.1.50" style="width:150px">
+  <div id="status">Ready</div>
 
-  <p>Scanned ration ID:</p>
-  <pre id="qrText"></pre>
-
-  <button id="uploadBtn" disabled>Upload Bill to Firebase</button>
+  <div id="qr-reader" style="width:300px; margin-top:16px;"></div>
+  <div style="margin-top:8px;">Last QR: <span id="lastQr"></span></div>
 
   <script>
-    // 1) Firebase config
-    const firebaseConfig = {
-      apiKey: "AIzaSyCf5yQAkQGICClkV1p39p8dqNIiZQoKeKc",
-      authDomain: "smart-rds.firebaseapp.com",
-      databaseURL: "https://smart-rds-default-rtdb.firebaseio.com",
-      projectId: "smart-rds",
-      storageBucket: "smart-rds.firebasestorage.app",
-      messagingSenderId: "1059807897058",
-      appId: "1:1059807897058:web:46fa1720cb7ca87658c5bb",
-      measurementId: "G-BFE86XW3DF"
-    };
+    async function sendToEsp32(text) {
+      const ip = document.getElementById("espIp").value.trim();
+      if (!ip) { alert("Set ESP32 IP first"); return; }
 
-    // 2) Initialize Firebase
-    const app = firebase.initializeApp(firebaseConfig);   // [web:97]
-    const db  = firebase.database();                     // [web:97]
-
-    let lastScan = "";
-
-    // Send rationId to ESP32 HTTP server
-    async function sendRationIdToEsp32(rationId) {
+      const url = `http://${ip}/qr?value=${encodeURIComponent(text)}`;
       try {
-        const url = "http://192.168.4.1/cardid"; // ESP32 AP IP
-        const params = new URLSearchParams();
-        params.append("rationId", rationId);
-
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: params.toString()
-        });
-
-        if (!res.ok) {
-          const txt = await res.text();
-          alert("ESP32 error: " + txt);
-        } else {
-          console.log("Ration ID sent to ESP32/STM32");
-        }
+        const res = await fetch(url);
+        const txt = await res.text();
+        document.getElementById("status").innerText = "Sent: " + txt;
       } catch (e) {
-        alert("Network error to ESP32: " + e);
+        document.getElementById("status").innerText = "HTTP error: " + e;
       }
     }
 
-    // 3) Called when QR is successfully decoded
     function onScanSuccess(decodedText, decodedResult) {
-      if (decodedText === lastScan) return;
-      lastScan = decodedText;
-
-      document.getElementById("qrText").textContent = decodedText;
-      document.getElementById("uploadBtn").disabled = false;
-
-      const rationId = decodedText.trim(); // "TN-09-1234567890"
-      // Immediately notify ESP32/STM32 to start card process
-      sendRationIdToEsp32(rationId);
+      document.getElementById("lastQr").innerText = decodedText;
+      sendToEsp32(decodedText);
     }
 
-    function onScanFailure(error) {
-      // ignore continuous scan errors
-    }
+    function onScanError(errorMessage) {}
 
-    // 4) Start QR scanner using back camera
-    const html5QrCode = new Html5Qrcode("reader");       // [web:218]
-    const config = { fps: 10, qrbox: 250 };
-
-    html5QrCode.start(
-      { facingMode: { exact: "environment" } },
-      config,
-      onScanSuccess,
-      onScanFailure
-    ).catch(err => {
-      html5QrCode.start(
-        { facingMode: "environment" },
-        config,
-        onScanSuccess,
-        onScanFailure
-      ).catch(err2 => {
-        alert("Camera error: " + err2);
-      });
-    });
-
-    // 5) Upload bill to Firebase when sale finished
-    document.getElementById("uploadBtn").addEventListener("click", () => {
-      if (!lastScan) return;
-
-      const rationId = lastScan.trim();
-      const shop     = "TN001";                 // adjust as needed
-      const cardType = "AAY";                   // can be chosen in UI later
-      const date     = new Date().toISOString();
-
-      const bill = {
-        date: date,
-        cardType: cardType,
-        rice: 0.5,
-        sugar: 0.5,
-        wheat: 0.5,
-        dhal: 0.5,
-        kerosene: 0.0
-      };
-
-      const path = `shops/${shop}/bills/${rationId}`;
-
-      db.ref(path).set(bill)                    // write to RTDB [web:97]
-        .then(() => {
-          alert("Bill uploaded for " + rationId);
-          document.getElementById("uploadBtn").disabled = true;
-        })
-        .catch(err => {
-          alert("Firebase error: " + err);
-        });
-    });
+    const html5QrCode = new Html5Qrcode("qr-reader");
+    Html5Qrcode.getCameras().then(cameras => {
+      if (cameras && cameras.length) {
+        html5QrCode.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: 250 },
+          onScanSuccess,
+          onScanError
+        );
+      }
+    }).catch(err => console.error(err));
   </script>
 </body>
 </html>
